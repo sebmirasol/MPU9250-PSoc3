@@ -1,0 +1,110 @@
+/*******************************************************
+
+            PROGRAMA PRUEBA LEER REGISTRO WHO AM I
+
+*******************************************************/
+#include <project.h>
+#include <stdio.h>
+
+#define WHO_AM_I_MPU9250 0x75
+char msg[100];
+
+
+void USBPrint(char8 datos[])
+{
+    while(USBUART_CDCIsReady() == 0u);    /* Wait till component is ready to send more data to the PC */ 
+    USBUART_PutString(datos);   
+}
+
+void RegWrite(uint8 WriteAddr, uint8 WriteData){
+    uint16 escribir;
+    escribir = (WriteAddr << 8) | WriteData ;
+    SPIM_1_WriteTxData(escribir);
+}
+
+uint16 RegRead(uint8 registro)
+{
+    uint16 reg;
+    uint8 ret;
+    
+    reg = registro|(uint8)0x80;
+    reg = reg<<8;
+    
+    SPIM_1_WriteTxData(reg);
+    
+    while (0u == (SPIM_1_ReadTxStatus() & SPIM_1_STS_SPI_DONE)){}
+    
+    ret = SPIM_1_ReadRxData();
+    
+    return(ret);
+}
+
+int main()
+{
+    uint8 whoami;
+    uint8 xhigh, xlow, yhigh, ylow, zhigh, zlow;
+    uint8 Gxhigh, Gxlow, Gyhigh, Gylow, Gzhigh, Gzlow;
+    uint16 X,Y,Z,gX,gY,gZ;
+    
+    CyGlobalIntEnable; /* Enable global interrupts. */
+    
+    USBUART_Start(0u, USBUART_5V_OPERATION);
+    SPIM_1_Start();
+    
+    
+    while(!USBUART_GetConfiguration())
+    USBUART_CDC_Init();
+    
+    CyDelay(2000u); 
+    sprintf(msg,"Lectura acelerometro eje X\n"); 
+    USBPrint(msg);
+    CyDelay(3000u); 
+    
+    // Configuracion basica
+    RegWrite(0x1B,0x18);    // Escala gyro
+    RegWrite(0x1C,0x18);    // Escala acc
+
+    for(;;)
+    {
+        /*
+        whoami = RegRead(WHO_AM_I_MPU9250);
+    
+        sprintf(msg,"MPU9250 I AM 0x%X, I SHOULD BE 0x71\n",whoami);
+        USBPrint(msg);
+        */
+        
+        // ACC DATA
+        xhigh = RegRead(0x3B);
+        xlow = RegRead(0x3C);
+        X=((int16)xhigh<<8) | xlow;
+
+        yhigh = RegRead(0x3D);
+        ylow = RegRead(0x3E);
+        Y=((int16)yhigh<<8) | ylow;
+
+        zhigh = RegRead(0x3F);
+        zlow = RegRead(0x40);
+        Z=((int16)zhigh<<8) | zlow;
+
+        // GYRO DATA
+
+        Gxhigh = RegRead(0x43);
+        Gxlow = RegRead(0x44);
+        gX=((int16)Gxhigh<<8) | Gxlow;
+
+        Gyhigh = RegRead(0x45);
+        Gylow = RegRead(0x46);
+        gY=((int16)Gyhigh<<8) | Gylow;
+
+        Gzhigh = RegRead(0x47);
+        Gzlow = RegRead(0x48);
+        gZ=((int16)Gzhigh<<8) | Gzlow;
+        
+        // Fer el complement a dos per a traure el valor
+        
+        sprintf(msg,"%d:%d:%d:%d:%d:%d\n",X,Y,Z,gX,gY,gZ);
+        USBPrint(msg);
+        
+        CyDelay(250);
+    }
+}
